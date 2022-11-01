@@ -2267,12 +2267,12 @@ class BertForACEBothOneDropoutSub(BertPreTrainedModel):
         bsz, tot_seq_len = input_ids.shape
         ent_len = (tot_seq_len-seq_len) // 2
 
-        e1_hidden_states = hidden_states[:, seq_len:seq_len+ent_len]
-        e2_hidden_states = hidden_states[:, seq_len+ent_len: ]
+        e1_hidden_states = hidden_states[:, seq_len:seq_len+ent_len] # 可能是subject？
+        e2_hidden_states = hidden_states[:, seq_len+ent_len: ] # 可能是object_list?
 
         feature_vector = torch.cat([e1_hidden_states, e2_hidden_states], dim=2)
 
-        ner_prediction_scores = self.ner_classifier(feature_vector)
+        ner_prediction_scores = self.ner_classifier(feature_vector) # 这个是啥，为啥可以抽取ner
 
 
         m1_start_states = hidden_states[torch.arange(bsz), sub_positions[:, 0]]
