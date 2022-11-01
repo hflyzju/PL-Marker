@@ -35,18 +35,18 @@ from tensorboardX import SummaryWriter
 from tqdm import tqdm, trange
 import time
 from transformers import (WEIGHTS_NAME, BertConfig,
-                                  BertTokenizer,
-                                  RobertaConfig,
-                                  RobertaTokenizer,
-                                  get_linear_schedule_with_warmup,
-                                  AdamW,
-                                  BertForACEBothOneDropoutSub,
-                                  AlbertForACEBothSub,
-                                  AlbertConfig,
-                                  AlbertTokenizer,
-                                  AlbertForACEBothOneDropoutSub,
-                                  BertForACEBothOneDropoutSubNoNer,
-                                  )
+                          BertTokenizer,
+                          RobertaConfig,
+                          RobertaTokenizer,
+                          get_linear_schedule_with_warmup,
+                          AdamW,
+                          BertForACEBothOneDropoutSub,
+                          AlbertForACEBothSub,
+                          AlbertConfig,
+                          AlbertTokenizer,
+                          AlbertForACEBothOneDropoutSub,
+                          BertForACEBothOneDropoutSubNoNer,
+                          )
 
 from transformers import AutoTokenizer
 from torch.utils.data import TensorDataset, Dataset
@@ -61,8 +61,7 @@ from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
-
-ALL_MODELS = sum((tuple(conf.pretrained_config_archive_map.keys()) for conf in (BertConfig,  AlbertConfig)), ())
+ALL_MODELS = sum((tuple(conf.pretrained_config_archive_map.keys()) for conf in (BertConfig, AlbertConfig)), ())
 
 MODEL_CLASSES = {
     'bertsub': (BertConfig, BertForACEBothOneDropoutSub, BertTokenizer),
@@ -83,7 +82,6 @@ task_rel_labels = {
 }
 
 
-
 class ACEDataset(Dataset):
     def __init__(self, tokenizer, args=None, evaluate=False, do_test=False, max_pair_length=None):
 
@@ -91,12 +89,12 @@ class ACEDataset(Dataset):
             file_path = os.path.join(args.data_dir, args.train_file)
         else:
             if do_test:
-                if args.test_file.find('models')==-1:
+                if args.test_file.find('models') == -1:
                     file_path = os.path.join(args.data_dir, args.test_file)
                 else:
                     file_path = args.test_file
             else:
-                if args.dev_file.find('models')==-1:
+                if args.dev_file.find('models') == -1:
                     file_path = os.path.join(args.data_dir, args.dev_file)
                 else:
                     file_path = args.dev_file
@@ -104,11 +102,11 @@ class ACEDataset(Dataset):
         assert os.path.isfile(file_path)
 
         self.file_path = file_path
-                
+
         self.tokenizer = tokenizer
         self.max_seq_length = args.max_seq_length
         self.max_pair_length = max_pair_length
-        self.max_entity_length = self.max_pair_length*2
+        self.max_entity_length = self.max_pair_length * 2
 
         self.evaluate = evaluate
         self.use_typemarker = args.use_typemarker
@@ -117,7 +115,7 @@ class ACEDataset(Dataset):
         self.model_type = args.model_type
         self.no_sym = args.no_sym
 
-        if args.data_dir.find('ace05')!=-1:
+        if args.data_dir.find('ace05') != -1:
             self.ner_label_list = ['NIL', 'FAC', 'WEA', 'LOC', 'VEH', 'GPE', 'ORG', 'PER']
 
             if args.no_sym:
@@ -125,11 +123,11 @@ class ACEDataset(Dataset):
                 self.sym_labels = ['NIL']
                 self.label_list = self.sym_labels + label_list
             else:
-                label_list = ['ART', 'ORG-AFF', 'GEN-AFF', 'PHYS',  'PART-WHOLE']
+                label_list = ['ART', 'ORG-AFF', 'GEN-AFF', 'PHYS', 'PART-WHOLE']
                 self.sym_labels = ['NIL', 'PER-SOC']
                 self.label_list = self.sym_labels + label_list
 
-        elif args.data_dir.find('ace04')!=-1:
+        elif args.data_dir.find('ace04') != -1:
             self.ner_label_list = ['NIL', 'FAC', 'WEA', 'LOC', 'VEH', 'GPE', 'ORG', 'PER']
 
             if args.no_sym:
@@ -141,36 +139,43 @@ class ACEDataset(Dataset):
                 self.sym_labels = ['NIL', 'PER-SOC']
                 self.label_list = self.sym_labels + label_list
 
-        elif args.data_dir.find('scierc')!=-1:      
+        elif args.data_dir.find('scierc') != -1:
             self.ner_label_list = ['NIL', 'Method', 'OtherScientificTerm', 'Task', 'Generic', 'Material', 'Metric']
 
             if args.no_sym:
-                label_list = ['CONJUNCTION', 'COMPARE', 'PART-OF', 'USED-FOR', 'FEATURE-OF',  'EVALUATE-FOR', 'HYPONYM-OF']
+                label_list = ['CONJUNCTION', 'COMPARE', 'PART-OF', 'USED-FOR', 'FEATURE-OF', 'EVALUATE-FOR',
+                              'HYPONYM-OF']
                 self.sym_labels = ['NIL']
                 self.label_list = self.sym_labels + label_list
             else:
-                label_list = ['PART-OF', 'USED-FOR', 'FEATURE-OF',  'EVALUATE-FOR', 'HYPONYM-OF']
+                label_list = ['PART-OF', 'USED-FOR', 'FEATURE-OF', 'EVALUATE-FOR', 'HYPONYM-OF']
                 self.sym_labels = ['NIL', 'CONJUNCTION', 'COMPARE']
                 self.label_list = self.sym_labels + label_list
 
         else:
-            assert (False)  
+            assert (False)
 
         self.global_predicted_ners = {}
         self.initialize()
- 
+
     def initialize(self):
         tokenizer = self.tokenizer
         vocab_size = tokenizer.vocab_size
-        max_num_subwords = self.max_seq_length - 4  # for two marker
+        max_num_subwords = self.max_seq_length - 4  # for two marker, 256-4
         label_map = {label: i for i, label in enumerate(self.label_list)}
         ner_label_map = {label: i for i, label in enumerate(self.ner_label_list)}
 
         def tokenize_word(text):
+            """英文分词，将每一个word分词成tokens
+            Args:
+                text(str): example: trans-context-free, English
+            Returns:
+                tokens(list): example: ['trans', '-', 'context', '-', 'free'], ['english']
+            """
             if (
-                isinstance(tokenizer, RobertaTokenizer)
-                and (text[0] != "'")
-                and (len(text) != 1 or not self.is_punctuation(text))
+                    isinstance(tokenizer, RobertaTokenizer)
+                    and (text[0] != "'")
+                    and (len(text) != 1 or not self.is_punctuation(text))
             ):
                 return tokenizer.tokenize(text, add_prefix_space=True)
             return tokenizer.tokenize(text)
@@ -187,26 +192,26 @@ class ACEDataset(Dataset):
         for l_idx, line in enumerate(f):
             data = json.loads(line)
 
-            if self.args.output_dir.find('test')!=-1:
+            if self.args.output_dir.find('test') != -1:
                 if len(self.data) > 100:
                     break
 
             sentences = data['sentences']
-            if 'predicted_ner' in data:       # e2e predict
-               ners = data['predicted_ner']               
+            if 'predicted_ner' in data:  # e2e predict
+                ners = data['predicted_ner']
             else:
-               ners = data['ner']
+                ners = data['ner']
 
             std_ners = data['ner']
 
             relations = data['relations']
 
             for sentence_relation in relations:
-                for x in sentence_relation:
+                for x in sentence_relation:  # [[29, 29, 31, 32, 'CONJUNCTION'], [48, 49, 51, 51, 'FEATURE-OF'], [54, 54, 51, 51, 'HYPONYM-OF']]
                     if x[4] in self.sym_labels[1:]:
                         self.tot_recall += 2
-                    else: 
-                        self.tot_recall +=  1
+                    else:
+                        self.tot_recall += 1
 
             sentence_boundaries = [0]
             words = []
@@ -216,8 +221,11 @@ class ACEDataset(Dataset):
                 sentence_boundaries.append(L)
                 words += sentences[i]
 
-            tokens = [tokenize_word(w) for w in words]
-            subwords = [w for li in tokens for w in li]
+            # 将英语word继续分词成subwords，并简历token到subword以及subword到token的映射
+            tokens = [tokenize_word(w) for w in
+                      words]  # [trans-context-free, English] -> [['trans', '-', 'context', '-', 'free'], ['english']]
+            subwords = [w for li in tokens for w in
+                        li]  # [['trans', '-', 'context', '-', 'free'], ['english']] -> ['trans', '-', 'context', '-', 'free', 'english']
             maxL = max(maxL, len(subwords))
             subword2token = list(itertools.chain(*[[i] * len(li) for i, li in enumerate(tokens)]))
             token2subword = [0] + list(itertools.accumulate(len(li) for li in tokens))
@@ -226,162 +234,208 @@ class ACEDataset(Dataset):
 
             for n in range(len(subword_sentence_boundaries) - 1):
 
-                sentence_ners = ners[n]
-                sentence_relations = relations[n]
-                std_ner = std_ners[n]
+                sentence_ners = ners[n]  # 有gold的时候用gold，没有用预测的结果
+                sentence_relations = relations[n]  # 关系
+                std_ner = std_ners[n]  # 标准的ner结果（gold）
 
-                std_entity_labels = {}
+                std_entity_labels = {}  # (start, end)到label的映射字典
                 self.ner_tot_recall += len(std_ner)
 
                 for start, end, label in std_ner:
                     std_entity_labels[(start, end)] = label
-                    self.ner_golden_labels.add( ((l_idx, n), (start, end), label) )
+                    self.ner_golden_labels.add(((l_idx, n), (start, end), label))  # 编号（行id，句子id），位置（start，end），label
 
-                self.global_predicted_ners[(l_idx, n)] = list(sentence_ners)
+                self.global_predicted_ners[(l_idx, n)] = list(sentence_ners)  # 预测的ner的结果
 
-                doc_sent_start, doc_sent_end = subword_sentence_boundaries[n : n + 2]
+                doc_sent_start, doc_sent_end = subword_sentence_boundaries[n: n + 2]  # 每个sentence的边界
 
-                left_length = doc_sent_start
-                right_length = len(subwords) - doc_sent_end
-                sentence_length = doc_sent_end - doc_sent_start
-                half_context_length = int((max_num_subwords - sentence_length) / 2)
+                # 问题？为什么一行要放多个sentences? 直接打平处理不好吗？
+
+                # 这里是在做什么？选取左右两边合适的上下文信息吗？
+                left_length = doc_sent_start  # 左边的文本的长度
+                right_length = len(subwords) - doc_sent_end  # 右边的文本的长度
+                sentence_length = doc_sent_end - doc_sent_start  # 当前文本的长度
+                # half_context_length多出来文本长度的一半
+                half_context_length = int((max_num_subwords - sentence_length) / 2)  # max_num_subwords=256-4=252
 
                 if sentence_length < max_num_subwords:
 
                     if left_length < right_length:
                         left_context_length = min(left_length, half_context_length)
-                        right_context_length = min(right_length, max_num_subwords - left_context_length - sentence_length)
+                        right_context_length = min(right_length,
+                                                   max_num_subwords - left_context_length - sentence_length)
                     else:
                         right_context_length = min(right_length, half_context_length)
-                        left_context_length = min(left_length, max_num_subwords - right_context_length - sentence_length)
-
+                        left_context_length = min(left_length,
+                                                  max_num_subwords - right_context_length - sentence_length)
 
                 doc_offset = doc_sent_start - left_context_length
-                target_tokens = subwords[doc_offset : doc_sent_end + right_context_length]
-                target_tokens = [tokenizer.cls_token] + target_tokens[ : self.max_seq_length - 4] + [tokenizer.sep_token] 
-                assert(len(target_tokens) <= self.max_seq_length - 2)
-                
-                pos2label = {}
+                target_tokens = subwords[doc_offset: doc_sent_end + right_context_length]
+                # 预留4个放mark标记的位置，其余进行截断成max_seq_length处理
+                target_tokens = [tokenizer.cls_token] + target_tokens[: self.max_seq_length - 4] + [tokenizer.sep_token]
+                assert (len(target_tokens) <= self.max_seq_length - 2)
+
+                pos2label = {}  # 位置(e1s, e1e, e2s, e2e)到label_index的映射
                 for x in sentence_relations:
-                    pos2label[(x[0],x[1],x[2],x[3])] = label_map[x[4]]
-                    self.golden_labels.add(((l_idx, n), (x[0],x[1]), (x[2],x[3]), x[4]))
-                    self.golden_labels_withner.add(((l_idx, n), (x[0],x[1], std_entity_labels[(x[0], x[1])]), (x[2],x[3], std_entity_labels[(x[2], x[3])]), x[4]))
+                    pos2label[(x[0], x[1], x[2], x[3])] = label_map[x[4]]  # [54, 54, 51, 51, 'HYPONYM-OF']
+                    self.golden_labels.add(((l_idx, n), (x[0], x[1]), (x[2], x[3]),
+                                            x[4]))  # 行id, sentent_id， (e1s, e1e,) (e2s, e2e), label
+                    # golden_labels_withner 加上ner label的数据, 行id, sentent_id， (e1s, e1e, label) (e2s, e2e, label), label
+                    self.golden_labels_withner.add(((l_idx, n), (x[0], x[1], std_entity_labels[(x[0], x[1])]),
+                                                    (x[2], x[3], std_entity_labels[(x[2], x[3])]), x[4]))
                     if x[4] in self.sym_labels[1:]:
-                        self.golden_labels.add(((l_idx, n),  (x[2],x[3]), (x[0],x[1]), x[4]))
-                        self.golden_labels_withner.add(((l_idx, n), (x[2],x[3], std_entity_labels[(x[2], x[3])]), (x[0],x[1], std_entity_labels[(x[0], x[1])]), x[4]))
+                        self.golden_labels.add(((l_idx, n), (x[2], x[3]), (x[0], x[1]), x[
+                            4]))  # 这个好像是反过来，(x[0], x[1]) -> (x[2], x[3]) 变成 (x[2], x[3]) -> (x[0], x[1])
+                        self.golden_labels_withner.add(((l_idx, n), (x[2], x[3], std_entity_labels[(x[2], x[3])]),
+                                                        (x[0], x[1], std_entity_labels[(x[0], x[1])]), x[4]))
 
                 entities = list(sentence_ners)
 
-                for x in sentence_relations:
-                    w = (x[2],x[3],x[0],x[1])
+                for x in sentence_relations:  # 啥意思，怎么又来一遍
+                    w = (x[2], x[3], x[0], x[1])  # 这个是反着又来一遍，关系是两边是相互的
                     if w not in pos2label:
                         if x[4] in self.sym_labels[1:]:
                             pos2label[w] = label_map[x[4]]  # bug
                         else:
-                            pos2label[w] = label_map[x[4]] + len(label_map) - len(self.sym_labels)
+                            pos2label[w] = label_map[x[4]] + len(label_map) - len(self.sym_labels)  # 赋予不同的label
 
                 if not self.evaluate:
-                    entities.append((10000, 10000, 'NIL')) # only for NER
+                    entities.append((10000, 10000, 'NIL'))  # only for NER
 
-                for sub in entities:    
+                # 每一个都可以当作是一个subject
+                for sub in entities:  # [[0, 0, 'Material'], [10, 10, 'OtherScientificTerm'], [17, 20, 'OtherScientificTerm'], (10000, 10000, 'NIL')]
                     cur_ins = []
 
                     if sub[0] < 10000:
-                        sub_s = token2subword[sub[0]] - doc_offset + 1
-                        sub_e = token2subword[sub[1]+1] - doc_offset
-                        sub_label = ner_label_map[sub[2]]
+                        sub_s = token2subword[sub[0]] - doc_offset + 1  # subword里面的起点
+                        sub_e = token2subword[sub[1] + 1] - doc_offset  # subword里面的终点
+                        sub_label = ner_label_map[sub[2]]  # 转化成label_id
 
                         if self.use_typemarker:
-                            l_m = '[unused%d]' % ( 2 + sub_label )
-                            r_m = '[unused%d]' % ( 2 + sub_label + len(self.ner_label_list) )
+                            l_m = '[unused%d]' % (2 + sub_label)
+                            r_m = '[unused%d]' % (2 + sub_label + len(self.ner_label_list))
                         else:
                             l_m = '[unused0]'
                             r_m = '[unused1]'
-                        
-                        sub_tokens = target_tokens[:sub_s] + [l_m] + target_tokens[sub_s:sub_e+1] + [r_m] + target_tokens[sub_e+1: ]
+                        # 添加subject的mark标记
+                        sub_tokens = target_tokens[:sub_s] + [l_m] + target_tokens[sub_s:sub_e + 1] + [
+                            r_m] + target_tokens[sub_e + 1:]
                         sub_e += 2
                     else:
                         sub_s = len(target_tokens)
-                        sub_e = len(target_tokens)+1
-                        sub_tokens = target_tokens + ['[unused0]',  '[unused1]']
+                        sub_e = len(target_tokens) + 1
+                        sub_tokens = target_tokens + ['[unused0]', '[unused1]']
                         sub_label = -1
 
-                    if sub_e >= self.max_seq_length-1:
+                    if sub_e >= self.max_seq_length - 1:
                         continue
                     # assert(sub_e < self.max_seq_length)
+                    # 又遍历一遍，收集object的位置
                     for start, end, obj_label in sentence_ners:
+                        # 跳过同一个实体
                         if self.model_type.endswith('nersub'):
-                            if start==sub[0] and end==sub[1]:
+                            if start == sub[0] and end == sub[1]:
                                 continue
 
                         doc_entity_start = token2subword[start]
-                        doc_entity_end = token2subword[end+1]
+                        doc_entity_end = token2subword[end + 1]
                         left = doc_entity_start - doc_offset + 1
                         right = doc_entity_end - doc_offset
 
                         obj = (start, end)
+                        # 如果obj的起点>sub的起点
                         if obj[0] >= sub[0]:
                             left += 1
+                            # 如果obj的起点大雨sub的终点
                             if obj[0] > sub[1]:
                                 left += 1
 
-                        if obj[1] >= sub[0]:   
+                        # 如果obj的终点大于sub的起点
+                        if obj[1] >= sub[0]:
                             right += 1
+                            # 如果obj的终点大于sub的终点
                             if obj[1] > sub[1]:
                                 right += 1
-    
-                        label = pos2label.get((sub[0], sub[1], obj[0], obj[1]), 0)
 
-                        if right >= self.max_seq_length-1:
+                        label = pos2label.get((sub[0], sub[1], obj[0], obj[1]), 0)  # 不存在的，label为0，这里相当于负样本也拿过来了
+
+                        if right >= self.max_seq_length - 1:
                             continue
 
-                        cur_ins.append(((left, right, ner_label_map[obj_label]), label, obj))
+                        # 记录了当前subject对应的object的所有的信息
+                        cur_ins.append(((left, right, ner_label_map[obj_label]), label,
+                                        obj))  # [((left=2, right=2, ner_label=5), label=0, obj=(start=0, end=0))]
 
-
-                    maxR = max(maxR, len(cur_ins))
-                    dL = self.max_pair_length
+                    maxR = max(maxR, len(cur_ins))  # 记录最多的object的个数
+                    dL = self.max_pair_length  # 分组，每组最多dL个
                     if self.args.shuffle:
                         np.random.shuffle(cur_ins)
 
                     for i in range(0, len(cur_ins), dL):
-                        examples = cur_ins[i : i + dL]
+                        # 一组object的结果[((2, 2, 5), 0, (0, 0)), ((17, 18, 2), 0, (10, 10)), ((25, 32, 2), 0, (17, 20))]
+                        # 每一个代表：[((left=2, right=2, ner_label=5), label=0, obj=(start=0, end=0))]
+                        examples = cur_ins[
+                                   i: i + dL]  # 一组object的结果[((2, 2, 5), 0, (0, 0)), ((17, 18, 2), 0, (10, 10)), ((25, 32, 2), 0, (17, 20))]
                         item = {
                             'index': (l_idx, n),
                             'sentence': sub_tokens,
                             'examples': examples,
-                            'sub': (sub, (sub_s, sub_e), sub_label), #(sub[0], sub[1], sub_label),
-                        }                
-                        
-                        self.data.append(item)                    
-        logger.info('maxR: %s', maxR)
-        logger.info('maxL: %s', maxL)
-                
+                            # packed 的 object的信息，每一个代表：[((left=2, right=2, ner_label=5), label=0, obj=(start=0, end=0))]
+                            'sub': (sub, (sub_s, sub_e), sub_label),
+                            # (sub=[0, 0, 'Material'], (sub_s=1, sub_e=3), 5), sub_s为继续分词后的start，sub_e为继续分词后的end
+                        }
+
+                        self.data.append(item)
+        logger.info('maxR: %s', maxR)  # 最多的object的个数
+        logger.info('maxL: %s', maxL)  # 最长的sub_tokens的长度
+
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, idx):
+        """每一个item的信息
+
+        Args:
+            l_idx: 行id, n: 句子id
+            sub_tokens: 分词后打平的tokens
+            examples: packaed的object的信息，参数设置最多为16个
+            sub: subject的信息，包括分词后
+        item = {
+            'index': (l_idx, n),
+            'sentence': sub_tokens,
+            'examples': examples, # packed 的 object的信息，每一个代表：[((left=2, right=2, ner_label=5), label=0, obj=(start=0, end=0))]
+            'sub': (sub, (sub_s, sub_e), sub_label), #(sub=[0, 0, 'Material'], (sub_s=1, sub_e=3), 5), sub_s为继续分词后的start，sub_e为继续分词后的end
+        }
+        """
         entry = self.data[idx]
+        # subject的信息
         sub, sub_position, sub_label = entry['sub']
         input_ids = self.tokenizer.convert_tokens_to_ids(entry['sentence'])
 
         L = len(input_ids)
         input_ids += [self.tokenizer.pad_token_id] * (self.max_seq_length - len(input_ids))
 
-        attention_mask = torch.zeros((self.max_entity_length+self.max_seq_length, self.max_entity_length+self.max_seq_length), dtype=torch.int64)
+        attention_mask = torch.zeros(
+            (self.max_entity_length + self.max_seq_length, self.max_entity_length + self.max_seq_length),
+            dtype=torch.int64)
         attention_mask[:L, :L] = 1
-        
+
         if self.model_type.startswith('albert'):
-            input_ids = input_ids + [30002] * (len(entry['examples'])) + [self.tokenizer.pad_token_id] * (self.max_pair_length - len(entry['examples']))
-            input_ids = input_ids + [30003] * (len(entry['examples'])) + [self.tokenizer.pad_token_id] * (self.max_pair_length - len(entry['examples'])) # for debug
+            input_ids = input_ids + [30002] * (len(entry['examples'])) + [self.tokenizer.pad_token_id] * (
+                        self.max_pair_length - len(entry['examples']))
+            input_ids = input_ids + [30003] * (len(entry['examples'])) + [self.tokenizer.pad_token_id] * (
+                        self.max_pair_length - len(entry['examples']))  # for debug
         else:
-            input_ids = input_ids + [3] * (len(entry['examples'])) + [self.tokenizer.pad_token_id] * (self.max_pair_length - len(entry['examples']))
-            input_ids = input_ids + [4] * (len(entry['examples'])) + [self.tokenizer.pad_token_id] * (self.max_pair_length - len(entry['examples'])) # for debug
+            input_ids = input_ids + [3] * (len(entry['examples'])) + [self.tokenizer.pad_token_id] * (
+                        self.max_pair_length - len(entry['examples']))
+            input_ids = input_ids + [4] * (len(entry['examples'])) + [self.tokenizer.pad_token_id] * (
+                        self.max_pair_length - len(entry['examples']))  # for debug
 
         labels = []
         ner_labels = []
         mention_pos = []
         mention_2 = []
-        position_ids = list(range(self.max_seq_length)) + [0] * self.max_entity_length 
+        position_ids = list(range(self.max_seq_length)) + [0] * self.max_entity_length
         num_pair = self.max_pair_length
 
         for x_idx, obj in enumerate(entry['examples']):
@@ -391,12 +445,12 @@ class ACEDataset(Dataset):
             mention_pos.append((m2[0], m2[1]))
             mention_2.append(obj[2])
 
-            w1 = x_idx  
+            w1 = x_idx
             w2 = w1 + num_pair
 
             w1 += self.max_seq_length
             w2 += self.max_seq_length
-            
+
             position_ids[w1] = m2[0]
             position_ids[w2] = m2[1]
 
@@ -409,19 +463,20 @@ class ACEDataset(Dataset):
             ner_labels.append(m2[2])
 
             if self.use_typemarker:
-                l_m = '[unused%d]' % ( 2 + m2[2] + len(self.ner_label_list)*2 )
-                r_m = '[unused%d]' % ( 2 + m2[2] + len(self.ner_label_list)*3 )
+                l_m = '[unused%d]' % (2 + m2[2] + len(self.ner_label_list) * 2)
+                r_m = '[unused%d]' % (2 + m2[2] + len(self.ner_label_list) * 3)
                 l_m = self.tokenizer._convert_token_to_id(l_m)
                 r_m = self.tokenizer._convert_token_to_id(r_m)
                 input_ids[w1] = l_m
                 input_ids[w2] = r_m
 
-
         pair_L = len(entry['examples'])
         if self.args.att_left:
-            attention_mask[self.max_seq_length : self.max_seq_length+pair_L, self.max_seq_length : self.max_seq_length+pair_L] = 1
+            attention_mask[self.max_seq_length: self.max_seq_length + pair_L,
+            self.max_seq_length: self.max_seq_length + pair_L] = 1
         if self.args.att_right:
-            attention_mask[self.max_seq_length+num_pair : self.max_seq_length+num_pair+pair_L, self.max_seq_length+num_pair : self.max_seq_length+num_pair+pair_L] = 1
+            attention_mask[self.max_seq_length + num_pair: self.max_seq_length + num_pair + pair_L,
+            self.max_seq_length + num_pair: self.max_seq_length + num_pair + pair_L] = 1
 
         mention_pos += [(0, 0)] * (num_pair - len(mention_pos))
         labels += [-1] * (num_pair - len(labels))
@@ -435,7 +490,7 @@ class ACEDataset(Dataset):
                 torch.tensor(labels, dtype=torch.int64),
                 torch.tensor(ner_labels, dtype=torch.int64),
                 torch.tensor(sub_label, dtype=torch.int64)
-        ]
+                ]
 
         if self.evaluate:
             item.append(entry['index'])
@@ -454,8 +509,6 @@ class ACEDataset(Dataset):
 
         return stacked_fields
 
- 
-
 
 def set_seed(args):
     random.seed(args.seed)
@@ -463,7 +516,6 @@ def set_seed(args):
     torch.manual_seed(args.seed)
     if args.n_gpu > 0:
         torch.cuda.manual_seed_all(args.seed)
-
 
 
 def _rotate_checkpoints(args, checkpoint_prefix, use_mtime=False):
@@ -494,17 +546,21 @@ def _rotate_checkpoints(args, checkpoint_prefix, use_mtime=False):
         logger.info("Deleting older checkpoint [{}] due to args.save_total_limit".format(checkpoint))
         shutil.rmtree(checkpoint)
 
+
 def train(args, model, tokenizer):
     """ Train the model """
     if args.local_rank in [-1, 0]:
-        tb_writer = SummaryWriter("logs/"+args.data_dir[max(args.data_dir.rfind('/'),0):]+"_re_logs/"+args.output_dir[args.output_dir.rfind('/'):])
+        tb_writer = SummaryWriter(
+            "logs/" + args.data_dir[max(args.data_dir.rfind('/'), 0):] + "_re_logs/" + args.output_dir[
+                                                                                       args.output_dir.rfind('/'):])
 
     args.train_batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
 
     train_dataset = ACEDataset(tokenizer=tokenizer, args=args, max_pair_length=args.max_pair_length)
 
     train_sampler = RandomSampler(train_dataset) if args.local_rank == -1 else DistributedSampler(train_dataset)
-    train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=args.train_batch_size, num_workers=4*int(args.output_dir.find('test')==-1))
+    train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=args.train_batch_size,
+                                  num_workers=4 * int(args.output_dir.find('test') == -1))
 
     if args.max_steps > 0:
         t_total = args.max_steps
@@ -515,14 +571,15 @@ def train(args, model, tokenizer):
     # Prepare optimizer and schedule (linear warmup and decay)
     no_decay = ['bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
-        {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)], 'weight_decay': args.weight_decay},
+        {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
+         'weight_decay': args.weight_decay},
         {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
-        ]
-    
+    ]
+
     optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
-    if args.warmup_steps==-1:
+    if args.warmup_steps == -1:
         scheduler = get_linear_schedule_with_warmup(
-            optimizer, num_warmup_steps=int(0.1*t_total), num_training_steps=t_total
+            optimizer, num_warmup_steps=int(0.1 * t_total), num_training_steps=t_total
         )
     else:
         scheduler = get_linear_schedule_with_warmup(
@@ -552,7 +609,8 @@ def train(args, model, tokenizer):
     logger.info("  Num Epochs = %d", args.num_train_epochs)
     logger.info("  Instantaneous batch size per GPU = %d", args.per_gpu_train_batch_size)
     logger.info("  Total train batch size (w. parallel, distributed & accumulation) = %d",
-                   args.train_batch_size * args.gradient_accumulation_steps * (torch.distributed.get_world_size() if args.local_rank != -1 else 1))
+                args.train_batch_size * args.gradient_accumulation_steps * (
+                    torch.distributed.get_world_size() if args.local_rank != -1 else 1))
     logger.info("  Gradient Accumulation steps = %d", args.gradient_accumulation_steps)
     logger.info("  Total optimization steps = %d", t_total)
 
@@ -566,8 +624,6 @@ def train(args, model, tokenizer):
     set_seed(args)  # Added here for reproductibility (even between python 2 and 3)
     best_f1 = -1
 
-
-
     for _ in train_iterator:
         if args.shuffle and _ > 0:
             train_dataset.initialize()
@@ -576,17 +632,15 @@ def train(args, model, tokenizer):
 
             model.train()
             batch = tuple(t.to(args.device) for t in batch)
-
-            inputs = {'input_ids':      batch[0],
+            inputs = {'input_ids': batch[0],
                       'attention_mask': batch[1],
-                      'position_ids':   batch[2],
-                      'labels':         batch[5],
-                      'ner_labels':     batch[6],
+                      'position_ids': batch[2],
+                      'labels': batch[5],
+                      'ner_labels': batch[6],
                       }
 
-
             inputs['sub_positions'] = batch[3]
-            if args.model_type.find('span')!=-1:
+            if args.model_type.find('span') != -1:
                 inputs['mention_pos'] = batch[4]
             if args.model_type.endswith('bertonedropoutnersub'):
                 inputs['sub_ner_labels'] = batch[7]
@@ -597,7 +651,7 @@ def train(args, model, tokenizer):
             ner_loss = outputs[2]
 
             if args.n_gpu > 1:
-                loss = loss.mean() # mean() to average on multi-gpu parallel training
+                loss = loss.mean()  # mean() to average on multi-gpu parallel training
             if args.gradient_accumulation_steps > 1:
                 loss = loss / args.gradient_accumulation_steps
                 re_loss = re_loss / args.gradient_accumulation_steps
@@ -614,7 +668,6 @@ def train(args, model, tokenizer):
                 tr_re_loss += re_loss.item()
             if ner_loss > 0:
                 tr_ner_loss += ner_loss.item()
-
 
             if (step + 1) % args.gradient_accumulation_steps == 0:
                 if args.max_grad_norm > 0:
@@ -634,17 +687,17 @@ def train(args, model, tokenizer):
                 if args.local_rank in [-1, 0] and args.logging_steps > 0 and global_step % args.logging_steps == 0:
                     # Log metrics
                     tb_writer.add_scalar('lr', scheduler.get_lr()[0], global_step)
-                    tb_writer.add_scalar('loss', (tr_loss - logging_loss)/args.logging_steps, global_step)
+                    tb_writer.add_scalar('loss', (tr_loss - logging_loss) / args.logging_steps, global_step)
                     logging_loss = tr_loss
 
-                    tb_writer.add_scalar('RE_loss', (tr_re_loss - logging_re_loss)/args.logging_steps, global_step)
+                    tb_writer.add_scalar('RE_loss', (tr_re_loss - logging_re_loss) / args.logging_steps, global_step)
                     logging_re_loss = tr_re_loss
 
-                    tb_writer.add_scalar('NER_loss', (tr_ner_loss - logging_ner_loss)/args.logging_steps, global_step)
+                    tb_writer.add_scalar('NER_loss', (tr_ner_loss - logging_ner_loss) / args.logging_steps, global_step)
                     logging_ner_loss = tr_ner_loss
 
-
-                if args.local_rank in [-1, 0] and args.save_steps > 0 and global_step % args.save_steps == 0: # valid for bert/spanbert
+                if args.local_rank in [-1,
+                                       0] and args.save_steps > 0 and global_step % args.save_steps == 0:  # valid for bert/spanbert
                     update = True
                     # Save model checkpoint
                     if args.evaluate_during_training:  # Only evaluate when single GPU otherwise metrics may not average well
@@ -654,7 +707,7 @@ def train(args, model, tokenizer):
 
                         if f1 > best_f1:
                             best_f1 = f1
-                            print ('Best F1', best_f1)
+                            print('Best F1', best_f1)
                         else:
                             update = False
 
@@ -663,7 +716,8 @@ def train(args, model, tokenizer):
                         output_dir = os.path.join(args.output_dir, '{}-{}'.format(checkpoint_prefix, global_step))
                         if not os.path.exists(output_dir):
                             os.makedirs(output_dir)
-                        model_to_save = model.module if hasattr(model, 'module') else model  # Take care of distributed/parallel training
+                        model_to_save = model.module if hasattr(model,
+                                                                'module') else model  # Take care of distributed/parallel training
 
                         model_to_save.save_pretrained(output_dir)
 
@@ -682,17 +736,18 @@ def train(args, model, tokenizer):
     if args.local_rank in [-1, 0]:
         tb_writer.close()
 
-
     return global_step, tr_loss / global_step, best_f1
+
 
 def to_list(tensor):
     return tensor.detach().cpu().tolist()
 
-def evaluate(args, model, tokenizer, prefix="", do_test=False):
 
+def evaluate(args, model, tokenizer, prefix="", do_test=False):
     eval_output_dir = args.output_dir
 
-    eval_dataset = ACEDataset(tokenizer=tokenizer, args=args, evaluate=True, do_test=do_test, max_pair_length=args.max_pair_length)
+    eval_dataset = ACEDataset(tokenizer=tokenizer, args=args, evaluate=True, do_test=do_test,
+                              max_pair_length=args.max_pair_length)
     golden_labels = set(eval_dataset.golden_labels)
     golden_labels_withner = set(eval_dataset.golden_labels_withner)
     label_list = list(eval_dataset.label_list)
@@ -704,7 +759,6 @@ def evaluate(args, model, tokenizer, prefix="", do_test=False):
 
     args.eval_batch_size = args.per_gpu_eval_batch_size * max(1, args.n_gpu)
 
-
     scores = defaultdict(dict)
     # ner_pred = not args.model_type.endswith('noner')
     example_subs = set([])
@@ -715,13 +769,15 @@ def evaluate(args, model, tokenizer, prefix="", do_test=False):
 
     model.eval()
 
-    eval_sampler = SequentialSampler(eval_dataset) 
-    eval_dataloader = DataLoader(eval_dataset, sampler=eval_sampler, batch_size=args.eval_batch_size,  collate_fn=ACEDataset.collate_fn, num_workers=4*int(args.output_dir.find('test')==-1))
+    eval_sampler = SequentialSampler(eval_dataset)
+    eval_dataloader = DataLoader(eval_dataset, sampler=eval_sampler, batch_size=args.eval_batch_size,
+                                 collate_fn=ACEDataset.collate_fn,
+                                 num_workers=4 * int(args.output_dir.find('test') == -1))
 
     # Eval!
     logger.info("  Num examples = %d", len(eval_dataset))
 
-    start_time = timeit.default_timer() 
+    start_time = timeit.default_timer()
 
     for batch in tqdm(eval_dataloader, desc="Evaluating"):
         indexs = batch[-3]
@@ -732,15 +788,15 @@ def evaluate(args, model, tokenizer, prefix="", do_test=False):
         batch = tuple(t.to(args.device) for t in batch[:-3])
 
         with torch.no_grad():
-            inputs = {'input_ids':      batch[0],
-                    'attention_mask': batch[1],
-                    'position_ids':   batch[2],
-                    #   'labels':         batch[4],
-                    #   'ner_labels':     batch[5],
-                    }
+            inputs = {'input_ids': batch[0],
+                      'attention_mask': batch[1],
+                      'position_ids': batch[2],
+                      #   'labels':         batch[4],
+                      #   'ner_labels':     batch[5],
+                      }
 
             inputs['sub_positions'] = batch[3]
-            if args.model_type.find('span')!=-1:
+            if args.model_type.find('span') != -1:
                 inputs['mention_pos'] = batch[4]
 
             outputs = model(**inputs)
@@ -753,7 +809,7 @@ def evaluate(args, model, tokenizer, prefix="", do_test=False):
             elif args.eval_softmax:
                 logits = torch.nn.functional.softmax(logits, dim=-1)
 
-            if args.use_ner_results or args.model_type.endswith('nonersub'):                 
+            if args.use_ner_results or args.model_type.endswith('nonersub'):
                 ner_preds = ner_labels
             else:
                 ner_preds = torch.argmax(outputs[1], dim=-1)
@@ -766,30 +822,31 @@ def evaluate(args, model, tokenizer, prefix="", do_test=False):
                 example_subs.add(((index[0], index[1]), (sub[0], sub[1])))
                 for j in range(len(m2s)):
                     obj = m2s[j]
-                    ner_label = eval_dataset.ner_label_list[ner_preds[i,j]]
-                    scores[(index[0], index[1])][( (sub[0], sub[1]), (obj[0], obj[1]))] = (logits[i, j].tolist(), ner_label)
-            
-    cor = 0 
+                    ner_label = eval_dataset.ner_label_list[ner_preds[i, j]]
+                    scores[(index[0], index[1])][((sub[0], sub[1]), (obj[0], obj[1]))] = (
+                    logits[i, j].tolist(), ner_label)
+
+    cor = 0
     tot_pred = 0
     cor_with_ner = 0
     global_predicted_ners = eval_dataset.global_predicted_ners
     ner_golden_labels = eval_dataset.ner_golden_labels
-    ner_cor = 0 
+    ner_cor = 0
     ner_tot_pred = 0
     ner_ori_cor = 0
     tot_output_results = defaultdict(list)
-    if not args.eval_unidirect:     # eval_unidrect is for ablation study
+    if not args.eval_unidirect:  # eval_unidrect is for ablation study
         # print (len(scores))
-        for example_index, pair_dict in sorted(scores.items(), key=lambda x:x[0]):  
-            visited  = set([])
+        for example_index, pair_dict in sorted(scores.items(), key=lambda x: x[0]):
+            visited = set([])
             sentence_results = []
             for k1, (v1, v2_ner_label) in pair_dict.items():
-                
+
                 if k1 in visited:
                     continue
                 visited.add(k1)
 
-                if v2_ner_label=='NIL':
+                if v2_ner_label == 'NIL':
                     continue
                 v1 = list(v1)
                 m1 = k1[0]
@@ -801,18 +858,18 @@ def evaluate(args, model, tokenizer, prefix="", do_test=False):
                 if v2s is not None:
                     visited.add(k2)
                     v2, v1_ner_label = v2s
-                    v2 = v2[ : len(sym_labels)] + v2[num_label:] + v2[len(sym_labels) : num_label]
+                    v2 = v2[: len(sym_labels)] + v2[num_label:] + v2[len(sym_labels): num_label]
 
                     for j in range(len(v2)):
                         v1[j] += v2[j]
                 else:
-                    assert ( False )
+                    assert (False)
 
-                if v1_ner_label=='NIL':
+                if v1_ner_label == 'NIL':
                     continue
 
                 pred_label = np.argmax(v1)
-                if pred_label>0:
+                if pred_label > 0:
                     if pred_label >= num_label:
                         pred_label = pred_label - num_label + len(sym_labels)
                         m1, m2 = m2, m1
@@ -820,14 +877,15 @@ def evaluate(args, model, tokenizer, prefix="", do_test=False):
 
                     pred_score = v1[pred_label]
 
-                    sentence_results.append( (pred_score, m1, m2, pred_label, v1_ner_label, v2_ner_label) )
+                    sentence_results.append((pred_score, m1, m2, pred_label, v1_ner_label, v2_ner_label))
 
             sentence_results.sort(key=lambda x: -x[0])
             no_overlap = []
+
             def is_overlap(m1, m2):
-                if m2[0]<=m1[0] and m1[0]<=m2[1]:
+                if m2[0] <= m1[0] and m1[0] <= m2[1]:
                     return True
-                if m1[0]<=m2[0] and m2[0]<=m1[1]:
+                if m1[0] <= m2[0] and m2[0] <= m1[1]:
                     return True
                 return False
 
@@ -841,12 +899,11 @@ def evaluate(args, model, tokenizer, prefix="", do_test=False):
                     _m1 = x[1]
                     _m2 = x[2]
                     # same relation type & overlap subject & overlap object --> delete
-                    if item[3]==x[3] and (is_overlap(m1, _m1) and is_overlap(m2, _m2)):
+                    if item[3] == x[3] and (is_overlap(m1, _m1) and is_overlap(m2, _m2)):
                         overlap = True
                         break
 
                 pred_label = label_list[item[3]]
-
 
                 if not overlap:
                     no_overlap.append(item)
@@ -859,12 +916,13 @@ def evaluate(args, model, tokenizer, prefix="", do_test=False):
                 pred_label = label_list[item[3]]
                 tot_pred += 1
                 if pred_label in sym_labels:
-                    tot_pred += 1 # duplicate
-                    if (example_index, m1, m2, pred_label) in golden_labels or (example_index, m2, m1, pred_label) in golden_labels:
+                    tot_pred += 1  # duplicate
+                    if (example_index, m1, m2, pred_label) in golden_labels or (
+                    example_index, m2, m1, pred_label) in golden_labels:
                         cor += 2
                 else:
                     if (example_index, m1, m2, pred_label) in golden_labels:
-                        cor += 1        
+                        cor += 1
 
                 if m1 not in pos2ner:
                     pos2ner[m1] = item[4]
@@ -873,21 +931,24 @@ def evaluate(args, model, tokenizer, prefix="", do_test=False):
 
                 output_preds.append((m1, m2, pred_label))
                 if pred_label in sym_labels:
-                    if (example_index, (m1[0], m1[1], pos2ner[m1]), (m2[0], m2[1], pos2ner[m2]), pred_label) in golden_labels_withner  \
-                            or (example_index,  (m2[0], m2[1], pos2ner[m2]), (m1[0], m1[1], pos2ner[m1]), pred_label) in golden_labels_withner:
+                    if (example_index, (m1[0], m1[1], pos2ner[m1]), (m2[0], m2[1], pos2ner[m2]),
+                        pred_label) in golden_labels_withner \
+                            or (example_index, (m2[0], m2[1], pos2ner[m2]), (m1[0], m1[1], pos2ner[m1]),
+                                pred_label) in golden_labels_withner:
                         cor_with_ner += 2
-                else:  
-                    if (example_index, (m1[0], m1[1], pos2ner[m1]), (m2[0], m2[1], pos2ner[m2]), pred_label) in golden_labels_withner:
-                        cor_with_ner += 1      
+                else:
+                    if (example_index, (m1[0], m1[1], pos2ner[m1]), (m2[0], m2[1], pos2ner[m2]),
+                        pred_label) in golden_labels_withner:
+                        cor_with_ner += 1
 
             if do_test:
-                #output_w.write(json.dumps(output_preds) + '\n')
-                tot_output_results[example_index[0]].append((example_index[1],  output_preds))
+                # output_w.write(json.dumps(output_preds) + '\n')
+                tot_output_results[example_index[0]].append((example_index[1], output_preds))
 
             # refine NER results
             ner_results = list(global_predicted_ners[example_index])
             for i in range(len(ner_results)):
-                start, end, label = ner_results[i] 
+                start, end, label = ner_results[i]
                 if (example_index, (start, end), label) in ner_golden_labels:
                     ner_ori_cor += 1
                 if (start, end) in pos2ner:
@@ -895,34 +956,34 @@ def evaluate(args, model, tokenizer, prefix="", do_test=False):
                 if (example_index, (start, end), label) in ner_golden_labels:
                     ner_cor += 1
                 ner_tot_pred += 1
-        
+
     else:
 
-        for example_index, pair_dict in sorted(scores.items(), key=lambda x:x[0]):  
+        for example_index, pair_dict in sorted(scores.items(), key=lambda x: x[0]):
             sentence_results = []
             for k1, (v1, v2_ner_label) in pair_dict.items():
-                
-                if v2_ner_label=='NIL':
+
+                if v2_ner_label == 'NIL':
                     continue
                 v1 = list(v1)
                 m1 = k1[0]
                 m2 = k1[1]
                 if m1 == m2:
                     continue
-              
-                pred_label = np.argmax(v1)
-                if pred_label>0 and pred_label < num_label:
 
+                pred_label = np.argmax(v1)
+                if pred_label > 0 and pred_label < num_label:
                     pred_score = v1[pred_label]
 
-                    sentence_results.append( (pred_score, m1, m2, pred_label, None, v2_ner_label) )
+                    sentence_results.append((pred_score, m1, m2, pred_label, None, v2_ner_label))
 
             sentence_results.sort(key=lambda x: -x[0])
             no_overlap = []
+
             def is_overlap(m1, m2):
-                if m2[0]<=m1[0] and m1[0]<=m2[1]:
+                if m2[0] <= m1[0] and m1[0] <= m2[1]:
                     return True
-                if m1[0]<=m2[0] and m2[0]<=m1[1]:
+                if m1[0] <= m2[0] and m2[0] <= m1[1]:
                     return True
                 return False
 
@@ -935,7 +996,7 @@ def evaluate(args, model, tokenizer, prefix="", do_test=False):
                 for x in no_overlap:
                     _m1 = x[1]
                     _m2 = x[2]
-                    if item[3]==x[3] and (is_overlap(m1, _m1) and is_overlap(m2, _m2)):
+                    if item[3] == x[3] and (is_overlap(m1, _m1) and is_overlap(m2, _m2)):
                         overlap = True
                         break
 
@@ -959,10 +1020,10 @@ def evaluate(args, model, tokenizer, prefix="", do_test=False):
                 tot_pred += 1
 
                 if (example_index, m1, m2, pred_label) in golden_labels:
-                    cor += 1        
+                    cor += 1
 
                 if m1 not in pos2ner:
-                    pos2ner[m1] = predpos2ner[m1]#item[4]
+                    pos2ner[m1] = predpos2ner[m1]  # item[4]
 
                 if m2 not in pos2ner:
                     pos2ner[m2] = item[5]
@@ -971,14 +1032,15 @@ def evaluate(args, model, tokenizer, prefix="", do_test=False):
                 #     if (example_index, (m1[0], m1[1], pos2ner[m1]), (m2[0], m2[1], pos2ner[m2]), pred_label) in golden_labels_withner \
                 #         or (example_index,  (m2[0], m2[1], pos2ner[m2]), (m1[0], m1[1], pos2ner[m1]), pred_label) in golden_labels_withner:
                 #         cor_with_ner += 2
-                # else:  
-                if (example_index, (m1[0], m1[1], pos2ner[m1]), (m2[0], m2[1], pos2ner[m2]), pred_label) in golden_labels_withner:
-                    cor_with_ner += 1      
-            
-            # refine NER results
+                # else:
+                if (example_index, (m1[0], m1[1], pos2ner[m1]), (m2[0], m2[1], pos2ner[m2]),
+                    pred_label) in golden_labels_withner:
+                    cor_with_ner += 1
+
+                    # refine NER results
             ner_results = list(global_predicted_ners[example_index])
             for i in range(len(ner_results)):
-                start, end, label = ner_results[i] 
+                start, end, label = ner_results[i]
                 if (example_index, (start, end), label) in ner_golden_labels:
                     ner_ori_cor += 1
                 if (start, end) in pos2ner:
@@ -987,34 +1049,33 @@ def evaluate(args, model, tokenizer, prefix="", do_test=False):
                     ner_cor += 1
                 ner_tot_pred += 1
 
-
     evalTime = timeit.default_timer() - start_time
-    logger.info("  Evaluation done in total %f secs (%f example per second)", evalTime,  len(global_predicted_ners) / evalTime)
+    logger.info("  Evaluation done in total %f secs (%f example per second)", evalTime,
+                len(global_predicted_ners) / evalTime)
 
     if do_test:
         output_w = open(os.path.join(args.output_dir, 'pred_results.json'), 'w')
         json.dump(tot_output_results, output_w)
 
-    ner_p = ner_cor / ner_tot_pred if ner_tot_pred > 0 else 0 
-    ner_r = ner_cor / len(ner_golden_labels) 
+    ner_p = ner_cor / ner_tot_pred if ner_tot_pred > 0 else 0
+    ner_r = ner_cor / len(ner_golden_labels)
     ner_f1 = 2 * (ner_p * ner_r) / (ner_p + ner_r) if ner_cor > 0 else 0.0
 
-    p = cor / tot_pred if tot_pred > 0 else 0 
-    r = cor / tot_recall 
+    p = cor / tot_pred if tot_pred > 0 else 0
+    r = cor / tot_recall
     f1 = 2 * (p * r) / (p + r) if cor > 0 else 0.0
-    assert(tot_recall==len(golden_labels))
+    assert (tot_recall == len(golden_labels))
 
-    p_with_ner = cor_with_ner / tot_pred if tot_pred > 0 else 0 
+    p_with_ner = cor_with_ner / tot_pred if tot_pred > 0 else 0
     r_with_ner = cor_with_ner / tot_recall
-    assert(tot_recall==len(golden_labels_withner))
+    assert (tot_recall == len(golden_labels_withner))
     f1_with_ner = 2 * (p_with_ner * r_with_ner) / (p_with_ner + r_with_ner) if cor_with_ner > 0 else 0.0
 
-    results = {'f1':  f1,  'f1_with_ner': f1_with_ner, 'ner_f1': ner_f1}
+    results = {'f1': f1, 'f1_with_ner': f1_with_ner, 'ner_f1': ner_f1}
 
     logger.info("Result: %s", json.dumps(results))
 
     return results
-
 
 
 def main():
@@ -1026,7 +1087,8 @@ def main():
     parser.add_argument("--model_type", default=None, type=str, required=True,
                         help="Model type selected in the list: " + ", ".join(MODEL_CLASSES.keys()))
     parser.add_argument("--model_name_or_path", default=None, type=str, required=True,
-                        help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(ALL_MODELS))
+                        help="Path to pre-trained model or shortcut name selected in the list: " + ", ".join(
+                            ALL_MODELS))
     parser.add_argument("--output_dir", default=None, type=str, required=True,
                         help="The output directory where the model predictions and checkpoints will be written.")
 
@@ -1098,10 +1160,10 @@ def main():
     parser.add_argument('--save_total_limit', type=int, default=1,
                         help='Limit the total amount of checkpoints, delete the older checkpoints in the output_dir, does not delete by default')
 
-    parser.add_argument("--train_file",  default="train.json", type=str)
-    parser.add_argument("--dev_file",  default="dev.json", type=str)
-    parser.add_argument("--test_file",  default="test.json", type=str)
-    parser.add_argument('--max_pair_length', type=int, default=64,  help="")
+    parser.add_argument("--train_file", default="train.json", type=str)
+    parser.add_argument("--dev_file", default="dev.json", type=str)
+    parser.add_argument("--test_file", default="test.json", type=str)
+    parser.add_argument('--max_pair_length', type=int, default=64, help="")
     parser.add_argument("--alpha", default=1.0, type=float)
     parser.add_argument('--save_results', action='store_true')
     parser.add_argument('--no_test', action='store_true')
@@ -1118,8 +1180,11 @@ def main():
 
     args = parser.parse_args()
 
-    if os.path.exists(args.output_dir) and os.listdir(args.output_dir) and args.do_train and not args.overwrite_output_dir:
-        raise ValueError("Output directory ({}) already exists and is not empty. Use --overwrite_output_dir to overcome.".format(args.output_dir))
+    if os.path.exists(args.output_dir) and os.listdir(
+            args.output_dir) and args.do_train and not args.overwrite_output_dir:
+        raise ValueError(
+            "Output directory ({}) already exists and is not empty. Use --overwrite_output_dir to overcome.".format(
+                args.output_dir))
 
     def create_exp_dir(path, scripts_to_save=None):
         if args.output_dir.endswith("test"):
@@ -1135,9 +1200,9 @@ def main():
                 dst_file = os.path.join(path, 'scripts', os.path.basename(script))
                 shutil.copyfile(script, dst_file)
 
-    if args.do_train and args.local_rank in [-1, 0] and args.output_dir.find('test')==-1:
-        create_exp_dir(args.output_dir, scripts_to_save=['run_re.py', 'transformers/src/transformers/modeling_bert.py', 'transformers/src/transformers/modeling_albert.py'])
-
+    if args.do_train and args.local_rank in [-1, 0] and args.output_dir.find('test') == -1:
+        create_exp_dir(args.output_dir, scripts_to_save=['run_re.py', 'transformers/src/transformers/modeling_bert.py',
+                                                         'transformers/src/transformers/modeling_albert.py'])
 
     # Setup distant debugging if needed
     if args.server_ip and args.server_port:
@@ -1159,23 +1224,23 @@ def main():
     args.device = device
 
     # Setup logging
-    logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
-                        datefmt = '%m/%d/%Y %H:%M:%S',
-                        level = logging.INFO if args.local_rank in [-1, 0] else logging.WARN)
+    logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
+                        datefmt='%m/%d/%Y %H:%M:%S',
+                        level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN)
     logger.warning("Process rank: %s, device: %s, n_gpu: %s, distributed training: %s, 16-bits training: %s",
-                    args.local_rank, device, args.n_gpu, bool(args.local_rank != -1), args.fp16)
+                   args.local_rank, device, args.n_gpu, bool(args.local_rank != -1), args.fp16)
 
     # Set seed
     set_seed(args)
 
-    if args.data_dir.find('ace')!=-1:
+    if args.data_dir.find('ace') != -1:
         num_ner_labels = 8
 
         if args.no_sym:
             num_labels = 7 + 7 - 1
         else:
             num_labels = 7 + 7 - 2
-    elif args.data_dir.find('scierc')!=-1:
+    elif args.data_dir.find('scierc') != -1:
         num_ner_labels = 7
 
         if args.no_sym:
@@ -1189,24 +1254,29 @@ def main():
     if args.local_rank not in [-1, 0]:
         torch.distributed.barrier()  # Make sure only the first process in distributed training will download model & vocab
 
-
     args.model_type = args.model_type.lower()
 
     config_class, model_class, tokenizer_class = MODEL_CLASSES[args.model_type]
 
-    config = config_class.from_pretrained(args.config_name if args.config_name else args.model_name_or_path, num_labels=num_labels)
-    tokenizer = tokenizer_class.from_pretrained(args.model_name_or_path,  do_lower_case=args.do_lower_case)
+    print("model_class:", model_class)
+
+    config = config_class.from_pretrained(args.config_name if args.config_name else args.model_name_or_path,
+                                          num_labels=num_labels)
+    tokenizer = tokenizer_class.from_pretrained(args.model_name_or_path, do_lower_case=args.do_lower_case)
 
     config.max_seq_length = args.max_seq_length
     config.alpha = args.alpha
     config.num_ner_labels = num_ner_labels
 
-    model = model_class.from_pretrained(args.model_name_or_path, from_tf=bool('.ckpt' in args.model_name_or_path), config=config)
+    model = model_class.from_pretrained(args.model_name_or_path, from_tf=bool('.ckpt' in args.model_name_or_path),
+                                        config=config)
 
+    print('model:', model)
 
     if args.model_type.startswith('albert'):
         if args.use_typemarker:
-            special_tokens_dict = {'additional_special_tokens': ['[unused' + str(x) + ']' for x in range(num_ner_labels*4+2)]}
+            special_tokens_dict = {
+                'additional_special_tokens': ['[unused' + str(x) + ']' for x in range(num_ner_labels * 4 + 2)]}
         else:
             special_tokens_dict = {'additional_special_tokens': ['[unused' + str(x) + ']' for x in range(4)]}
         tokenizer.add_special_tokens(special_tokens_dict)
@@ -1216,19 +1286,19 @@ def main():
 
     if args.do_train:
         subject_id = tokenizer.encode('subject', add_special_tokens=False)
-        assert(len(subject_id)==1)
+        assert (len(subject_id) == 1)
         subject_id = subject_id[0]
         object_id = tokenizer.encode('object', add_special_tokens=False)
-        assert(len(object_id)==1)
+        assert (len(object_id) == 1)
         object_id = object_id[0]
 
         mask_id = tokenizer.encode('[MASK]', add_special_tokens=False)
-        assert(len(mask_id)==1)
+        assert (len(mask_id) == 1)
         mask_id = mask_id[0]
 
         logger.info(" subject_id = %s, object_id = %s, mask_id = %s", subject_id, object_id, mask_id)
 
-        if args.lminit: 
+        if args.lminit:
             if args.model_type.startswith('albert'):
                 word_embeddings = model.albert.embeddings.word_embeddings.weight.data
                 subs = 30000
@@ -1242,11 +1312,11 @@ def main():
                 objs = 3
                 obje = 4
 
-            word_embeddings[subs].copy_(word_embeddings[mask_id])     
-            word_embeddings[sube].copy_(word_embeddings[subject_id])   
+            word_embeddings[subs].copy_(word_embeddings[mask_id])
+            word_embeddings[sube].copy_(word_embeddings[subject_id])
 
-            word_embeddings[objs].copy_(word_embeddings[mask_id])      
-            word_embeddings[obje].copy_(word_embeddings[object_id])     
+            word_embeddings[objs].copy_(word_embeddings[mask_id])
+            word_embeddings[obje].copy_(word_embeddings[object_id])
 
     if args.local_rank == 0:
         torch.distributed.barrier()  # Make sure only the first process in distributed training will download model & vocab
@@ -1272,7 +1342,7 @@ def main():
             f1 = results['f1_with_ner']
             if f1 > best_f1:
                 best_f1 = f1
-                print ('Best F1', best_f1)
+                print('Best F1', best_f1)
             else:
                 update = False
 
@@ -1281,7 +1351,8 @@ def main():
             output_dir = os.path.join(args.output_dir, '{}-{}'.format(checkpoint_prefix, global_step))
             if not os.path.exists(output_dir):
                 os.makedirs(output_dir)
-            model_to_save = model.module if hasattr(model, 'module') else model  # Take care of distributed/parallel training
+            model_to_save = model.module if hasattr(model,
+                                                    'module') else model  # Take care of distributed/parallel training
 
             model_to_save.save_pretrained(output_dir)
 
@@ -1293,7 +1364,6 @@ def main():
 
         torch.save(args, os.path.join(args.output_dir, 'training_args.bin'))
 
-
     # Evaluation
     results = {'dev_best_f1': best_f1}
     if args.do_eval and args.local_rank in [-1, 0]:
@@ -1303,7 +1373,8 @@ def main():
         WEIGHTS_NAME = 'pytorch_model.bin'
 
         if args.eval_all_checkpoints:
-            checkpoints = list(os.path.dirname(c) for c in sorted(glob.glob(args.output_dir + '/**/' + WEIGHTS_NAME, recursive=True)))
+            checkpoints = list(
+                os.path.dirname(c) for c in sorted(glob.glob(args.output_dir + '/**/' + WEIGHTS_NAME, recursive=True)))
 
         logger.info("Evaluate the following checkpoints: %s", checkpoints)
         for checkpoint in checkpoints:
@@ -1315,7 +1386,7 @@ def main():
             result = evaluate(args, model, tokenizer, prefix=global_step, do_test=not args.no_test)
             result = dict((k + '_{}'.format(global_step), v) for k, v in result.items())
             results.update(result)
-        print (results)
+        print(results)
 
         if args.no_test:  # choose best resutls on dev set
             bestv = 0
@@ -1323,7 +1394,7 @@ def main():
             for k, v in results.items():
                 if v > bestv:
                     bestk = k
-            print (bestk)
+            print(bestk)
 
         output_eval_file = os.path.join(args.output_dir, "results.json")
         json.dump(results, open(output_eval_file, "w"))
